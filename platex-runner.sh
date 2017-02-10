@@ -5,14 +5,14 @@ usage_exit() {
     echo
     echo "Options:" 1>&2
     echo "      h: this usage shows." 1>&2
-    echo "      p: pandoc mode." 1>&2
-    echo "      b: beamer option for pandoc." 1>&2
-    echo "      c: bibtex citation option for pandoc." 1>&2
+    echo "      p: Pandoc mode." 1>&2
+    echo "      b: Beamer option for Pandoc." 1>&2
+    echo "      c: BibTeX citation option for Pandoc." 1>&2
     echo "      v: verbose option." 1>&2
 	exit 1
 }
 
-[ -n "$(which inotifywait 2>&1 | grep "no inotifywait in")" ] && { echo "inotify-tools is not installed."; exit 1; }
+[ -n "$(which inotifywait 2>&1 | grep "no inotifywait in")" ] && { echo "inotify-tools is not installed." 1>&2; exit 1; }
 
 pandoc_output_type=''
 pandoc_filter=''
@@ -21,7 +21,7 @@ pandoc_options=''
 while getopts "hpbcv" OPT
 do
 	case $OPT in
-        p) [ -n "$(which pandoc 2>&1 | grep "no pandoc in")" ] && { echo "pandoc is not installed."; exit 1; }
+        p) [ -n "$(which pandoc 2>&1 | grep "no pandoc in")" ] && { echo "Pandoc is not installed." 1>&2; exit 1; }
             pandoc_mode=1
             ;;
         b) pandoc_output_type='-t beamer'
@@ -39,7 +39,7 @@ done
 
 shift $((OPTIND - 1))
 
-[ -f "$1" ] || { echo "monitoring-item does not exist."; usage_exit; }
+[ -f "$1" ] || { echo "monitoring-item does not exist." 1>&2; usage_exit; }
 
 file_name_with_ext=$(basename $1)
 directory_path=$(dirname $1)
@@ -54,7 +54,8 @@ then
 
 else
 
-    file_name=$(basename $file_name_with_ext .markdown)
+    file_ext="${file_name_with_ext##*.}"
+    file_name=$(basename $file_name_with_ext '.'$file_ext)
 
     inotifywait -m --event modify $directory_path'/.' | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then compiled_result=$(pandoc -s $directory_path'/'$file_name_with_ext $pandoc_output_type $pandoc_filter --latex-engine=xelatex -o $directory_path'/'$file_name'.pdf' $pandoc_options && echo "Success"); filter_result=$(echo "$compiled_result"); [ -n "$filter_result" ] && (notify-send "Compilation Sucess" "Success" --icon=dialog-information) || (notify-send "Compilation Failure" "$filter_result" --icon=dialog-error; echo "$compiled_result"); fi done
 
