@@ -7,15 +7,27 @@ usage_exit() {
     echo "      h: this usage shows." 1>&2
     echo "      p: Pandoc mode." 1>&2
     echo "      b: Beamer option for Pandoc." 1>&2
-    echo "      c: BibTeX citation option for Pandoc." 1>&2
+    echo "      c: BibTeX citation option (for both of pLaTeX and Pandoc)." 1>&2
     echo "      v: verbose option." 1>&2
 	exit 1
+}
+
+use_bibtex_or_not() {
+
+	if [ ! -v pandoc_filter -o ! -e $1'.aux' ]
+	then
+		_flags="test 1"
+	else
+		_flags="bibtex $1"
+	fi
+
+	echo $_flags
+	return
 }
 
 [ -n "$(which inotifywait 2>&1 | grep "no inotifywait in")" ] && { echo "inotify-tools is not installed." 1>&2; exit 1; }
 
 pandoc_output_type=''
-pandoc_filter=''
 pandoc_options=''
 
 while getopts "hpbcv" OPT
@@ -50,7 +62,13 @@ then
 
     file_name=$(basename $file_name_with_ext .tex)
 
-    inotifywait -m --event modify $directory_path'/.' | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then compiled_result=$(platex $directory_path'/'$file_name_with_ext && dvipdfmx $directory_path'/'$file_name); filter_result=$(echo "$compiled_result" | grep -G '^Output written'); [ -n "$filter_result" ] && notify-send "Compilation Success" "$filter_result" --icon=dialog-information || (notify-send "Compilation Failure" "Please see the error display on the terminal." --icon=dialog-error; echo "$compiled_result"); fi done
+	platex_file_path=$directory_path'/'$file_name_with_ext
+
+	trans_file_path=$directory_path'/'$file_name
+
+	pre_commands=`use_bibtex_or_not $trans_file_path`
+
+    inotifywait -m --event modify $directory_path'/.' | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then compiled_result=$($pre_commands && platex $platex_file_path && dvipdfmx $trans_file_path); filter_result=$(echo "$compiled_result" | grep -G '^Output written'); [ -n "$filter_result" ] && (notify-send "Compilation Success" "$filter_result" --icon=dialog-information; pre_commands=`use_bibtex_or_not $trans_file_path`) || (notify-send "Compilation Failure" "Please see the error display on the terminal." --icon=dialog-error; echo "$compiled_result"); fi done
 
 else
 
