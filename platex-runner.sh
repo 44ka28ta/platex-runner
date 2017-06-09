@@ -77,6 +77,6 @@ else
     file_ext="${file_name_with_ext##*.}"
     file_name=$(basename $file_name_with_ext '.'$file_ext)
 
-    inotifywait -m --event $WATCH_EVENT $directory_path'/'$file_name_with_ext $ | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then compiled_result=$(pandoc -s $directory_path'/'$file_name_with_ext $pandoc_output_type $pandoc_filter --latex-engine=xelatex -o $directory_path'/'$file_name'.pdf' $pandoc_options && echo "Success"); filter_result=$(echo "$compiled_result"); [ -n "$filter_result" ] && (notify-send "Compilation Sucess" "Success" --icon=dialog-information) || (notify-send "Compilation Failure" "$filter_result" --icon=dialog-error; echo "$compiled_result"); fi done
+    inotifywait -m --event $WATCH_EVENT $directory_path'/.' $ | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then compiled_result=$(pandoc -s $directory_path'/'$file_name_with_ext $pandoc_output_type $pandoc_filter --latex-engine=xelatex -o $directory_path'/'$file_name'.pdf' $pandoc_options && echo "Success"); filter_result=$(echo "$compiled_result"); [ -n "$filter_result" ] && (notify-send "Compilation Sucess" "Success" --icon=dialog-information) || (notify-send "Compilation Failure" "$filter_result" --icon=dialog-error; echo "$compiled_result"); fi done
 
 fi
