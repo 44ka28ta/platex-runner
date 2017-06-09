@@ -1,5 +1,7 @@
 #/bin/sh
 
+WATCH_EVENT="attrib"
+
 usage_exit() {
 	echo "Usage: $0 [-hpbcv] monitoring-item" 1>&2
     echo
@@ -68,13 +70,13 @@ then
 
 	pre_commands=`use_bibtex_or_not $trans_file_path`
 
-    inotifywait -m --event modify $directory_path'/.' | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then fst_compiled_result=$(platex $platex_file_path); fst_filter_result=$(echo "$fst_compiled_result" | grep '! Emergency stop.'); [ ! -n "$fst_filter_result" ] && (display_notification=$(echo $fst_compiled_result | sed -e "s/^.*\(Output written.*\)$/\1/"); notify-send "Compilation Success" "$display_notification" --icon=dialog-information; $pre_commands && platex $platex_file_path && dvipdfmx $trans_file_path 2> /dev/null; pre_commands=`use_bibtex_or_not $trans_file_path`) || (notify-send "Compilation Failure" "Please see the error display on the terminal." --icon=dialog-error && rm $trans_file_path'.aux'; echo "$fst_compiled_result"); fi done
+    inotifywait -m --event $WATCH_EVENT $directory_path'/.' | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then fst_compiled_result=$(platex $platex_file_path); fst_filter_result=$(echo "$fst_compiled_result" | grep '! Emergency stop.'); [ ! -n "$fst_filter_result" ] && (display_notification=$(echo $fst_compiled_result | sed -e "s/^.*\(Output written.*\)$/\1/"); notify-send "Compilation Success" "$display_notification" --icon=dialog-information; $pre_commands && platex $platex_file_path && dvipdfmx $trans_file_path 2> /dev/null; pre_commands=`use_bibtex_or_not $trans_file_path`) || (notify-send "Compilation Failure" "Please see the error display on the terminal." --icon=dialog-error && rm $trans_file_path'.aux'; echo "$fst_compiled_result"); fi done
 
 else
 
     file_ext="${file_name_with_ext##*.}"
     file_name=$(basename $file_name_with_ext '.'$file_ext)
 
-    inotifywait -m --event modify $directory_path'/.' | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then compiled_result=$(pandoc -s $directory_path'/'$file_name_with_ext $pandoc_output_type $pandoc_filter --latex-engine=xelatex -o $directory_path'/'$file_name'.pdf' $pandoc_options && echo "Success"); filter_result=$(echo "$compiled_result"); [ -n "$filter_result" ] && (notify-send "Compilation Sucess" "Success" --icon=dialog-information) || (notify-send "Compilation Failure" "$filter_result" --icon=dialog-error; echo "$compiled_result"); fi done
+    inotifywait -m --event $WATCH_EVENT $directory_path'/'$file_name_with_ext $ | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then compiled_result=$(pandoc -s $directory_path'/'$file_name_with_ext $pandoc_output_type $pandoc_filter --latex-engine=xelatex -o $directory_path'/'$file_name'.pdf' $pandoc_options && echo "Success"); filter_result=$(echo "$compiled_result"); [ -n "$filter_result" ] && (notify-send "Compilation Sucess" "Success" --icon=dialog-information) || (notify-send "Compilation Failure" "$filter_result" --icon=dialog-error; echo "$compiled_result"); fi done
 
 fi
