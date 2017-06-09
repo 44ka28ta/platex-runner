@@ -68,7 +68,7 @@ then
 
 	pre_commands=`use_bibtex_or_not $trans_file_path`
 
-    inotifywait -m --event modify $directory_path'/.' | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then compiled_result=$($pre_commands && platex $platex_file_path && dvipdfmx $trans_file_path); filter_result=$(echo "$compiled_result" | grep -G '^Output written'); [ -n "$filter_result" ] && (notify-send "Compilation Success" "$filter_result" --icon=dialog-information; pre_commands=`use_bibtex_or_not $trans_file_path`) || (notify-send "Compilation Failure" "Please see the error display on the terminal." --icon=dialog-error; echo "$compiled_result"); fi done
+    inotifywait -m --event modify $directory_path'/.' | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then fst_compiled_result=$(platex $platex_file_path); fst_filter_result=$(echo "$fst_compiled_result" | grep '! Emergency stop.'); [ ! -n "$fst_filter_result" ] && (display_notification=$(echo $fst_compiled_result | sed -e "s/^.*\(Output written.*\)$/\1/"); notify-send "Compilation Success" "$display_notification" --icon=dialog-information; $pre_commands && platex $platex_file_path && dvipdfmx $trans_file_path 2> /dev/null; pre_commands=`use_bibtex_or_not $trans_file_path`) || (notify-send "Compilation Failure" "Please see the error display on the terminal." --icon=dialog-error && rm $trans_file_path'.aux'; echo "$fst_compiled_result"); fi done
 
 else
 
