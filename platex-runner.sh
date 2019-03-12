@@ -8,8 +8,9 @@ usage_exit() {
     echo "Options:" 1>&2
     echo "      h: this usage shows." 1>&2
     echo "      p: Pandoc mode." 1>&2
+    echo "      u: upLaTeX mode." 1>&2
     echo "      b: Beamer option for Pandoc." 1>&2
-	echo "      n: Pandoc option for Numbered section." 1>&2
+    echo "      n: Pandoc option for Numbered section." 1>&2
     echo "      c: BibTeX citation option (for both of pLaTeX and Pandoc)." 1>&2
     echo "      v: verbose option." 1>&2
     exit 1
@@ -28,16 +29,61 @@ use_bibtex_or_not() {
 	return
 }
 
+prepare_pandoc_env() {
+
+	if [ -n "$(which pandoc 2>&1 | grep "no pandoc in")" ]
+	then
+	       
+		echo "Pandoc is not installed." 1>&2
+		echo "try to use cabal package manager." 1>&2
+
+		if [ -n "$(which cabal 2>&1 | grep "no cabal in")" ]
+		then
+			exit 1
+		fi
+
+		if [ -n "$(ls *.cabal 2>&1 | grep "No such file")" ]
+		then
+			echo "create cabal profile." 1>&2
+
+			cat << EOS > auto-gen.cabal
+name: automatic-generated-profile
+version: 0.0.1
+build-type: Simple
+cabal-version: >=1.10
+
+library
+  build-depends:       pandoc
+                      ,pandoc-citeproc
+  default-language:    Haskell2010
+EOS
+		fi
+
+		cabal new-build
+
+		cabal_state='cabal new-exec'
+		cabal_delimiter=' --'
+
+		echo "finished cabal preparation." 1>&2
+
+	fi
+}
+
 [ -n "$(which inotifywait 2>&1 | grep "no inotifywait in")" ] && { echo "inotify-tools is not installed." 1>&2; exit 1; }
 
 pandoc_output_type=''
 pandoc_options=''
 
-while getopts "hpbcnv" OPT
+cabal_state=''
+cabal_delimiter=''
+
+while getopts "hpubcnv" OPT
 do
 	case $OPT in
-        p) [ -n "$(which pandoc 2>&1 | grep "no pandoc in")" ] && { echo "Pandoc is not installed." 1>&2; exit 1; }
+        p) prepare_pandoc_env
             pandoc_mode=1
+            ;;
+	u) uplatex_mode=1
             ;;
         b) pandoc_output_type='-t beamer'
             ;;
@@ -67,18 +113,25 @@ then
 
     file_name=$(basename $file_name_with_ext .tex)
 
-	platex_file_path=$directory_path'/'$file_name_with_ext
+    platex_file_path=$directory_path'/'$file_name_with_ext
 
-	trans_file_path=$directory_path'/'$file_name
+    trans_file_path=$directory_path'/'$file_name
 
-	pre_commands=`use_bibtex_or_not $trans_file_path`
+    pre_commands=`use_bibtex_or_not $trans_file_path`
 
-    inotifywait -m --event $WATCH_EVENT $directory_path'/.' | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then fst_compiled_result=$(platex $platex_file_path); fst_filter_result=$(echo "$fst_compiled_result" | grep '! Emergency stop.'); [ ! -n "$fst_filter_result" ] && (display_notification=$(echo $fst_compiled_result | sed -e "s/^.*\(Output written.*\)$/\1/"); notify-send "Compilation Success" "$display_notification" --icon=dialog-information; $pre_commands && platex $platex_file_path && dvipdfmx $trans_file_path 2> /dev/null; pre_commands=`use_bibtex_or_not $trans_file_path`) || (notify-send "Compilation Failure" "Please see the error display on the terminal." --icon=dialog-error && rm $trans_file_path'.aux'; echo "$fst_compiled_result"); fi done
+    if [ ! -v uplatex_mode ]
+    then
+        
+        inotifywait -m --event $WATCH_EVENT $directory_path'/.' | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then fst_compiled_result=$(platex $platex_file_path); fst_filter_result=$(echo "$fst_compiled_result" | grep '! Emergency stop.'); [ ! -n "$fst_filter_result" ] && (display_notification=$(echo $fst_compiled_result | sed -e "s/^.*\(Output written.*\)$/\1/"); notify-send "Compilation Success" "$display_notification" --icon=dialog-information; $pre_commands && platex $platex_file_path && dvipdfmx $trans_file_path 2> /dev/null; pre_commands=`use_bibtex_or_not $trans_file_path`) || (notify-send "Compilation Failure" "Please see the error display on the terminal." --icon=dialog-error && rm $trans_file_path'.aux'; echo "$fst_compiled_result"); fi done
+    else
+        inotifywait -m --event $WATCH_EVENT $directory_path'/.' | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then fst_compiled_result=$(uplatex $platex_file_path); fst_filter_result=$(echo "$fst_compiled_result" | grep '! Emergency stop.'); [ ! -n "$fst_filter_result" ] && (display_notification=$(echo $fst_compiled_result | sed -e "s/^.*\(Output written.*\)$/\1/"); notify-send "Compilation Success" "$display_notification" --icon=dialog-information; $pre_commands && uplatex $platex_file_path && dvipdfmx $trans_file_path 2> /dev/null; pre_commands=`use_bibtex_or_not $trans_file_path`) || (notify-send "Compilation Failure" "Please see the error display on the terminal." --icon=dialog-error && rm $trans_file_path'.aux'; echo "$fst_compiled_result"); fi done
+
+    fi
 
 else
     file_ext="${file_name_with_ext##*.}"
     file_name=$(basename $file_name_with_ext '.'$file_ext)
 
-    inotifywait -m --event $WATCH_EVENT $directory_path'/.' | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then compiled_result=$(pandoc -s $directory_path'/'$file_name_with_ext $pandoc_output_type $pandoc_filter --latex-engine=xelatex -o $directory_path'/'$file_name'.pdf' $pandoc_options && echo "Success"); filter_result=$(echo "$compiled_result"); [ -n "$filter_result" ] && (notify-send "Compilation Sucess" "Success" --icon=dialog-information) || (notify-send "Compilation Failure" "$filter_result" --icon=dialog-error; echo "$compiled_result"); fi done
+    inotifywait -m --event $WATCH_EVENT $directory_path'/.' | while read -r result; do echo $result | if [ -n "$(grep -G $file_name_with_ext'$')" ]; then compiled_result=$($cabal_state pandoc$cabal_delimiter -s $directory_path'/'$file_name_with_ext $pandoc_output_type $pandoc_filter --pdf-engine=xelatex -o $directory_path'/'$file_name'.pdf' $pandoc_options && echo "Success"); filter_result=$(echo "$compiled_result"); [ -n "$filter_result" ] && (notify-send "Compilation Sucess" "Success" --icon=dialog-information) || (notify-send "Compilation Failure" "$filter_result" --icon=dialog-error; echo "$compiled_result"); fi done
 
 fi
